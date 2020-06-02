@@ -3,6 +3,9 @@
 
 "use strict";
 
+const queryString = window.location.search;
+const urlParams = new URLSearchParams(queryString);
+
 const endString = "<p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p>";
 
 var currentZoom = 100;
@@ -178,8 +181,13 @@ function loadBook() {
 
 function saveVars() {
 	window.localStorage.setItem('v', JSON.stringify(v));
+	if (urlParams.has('vars')) variableWindow();
 }
-	
+
+function variableWindow() {
+	window.open('basement/variable_window.html','variables','directories=no,titlebar=no,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=400,height=350');
+}
+
 function loadVars() {
 	var vars = window.localStorage.getItem('v');
 	if (vars) {
@@ -284,7 +292,7 @@ function clickOption(optionvar, book_ptr, html_ptr) {
 	v['pp_book_ptr'] = book_ptr;
 	v['pp_html_ptr'] = html_ptr;
 	v[optionvar + "_selected"] = true;
-	v[optionvar + "_last"] = true;
+	v[optionvar + "_ever"] = true;
 	v[optionvar] = true;
 	saveVars();
 	loadBook(book_ptr, html_ptr);
@@ -376,7 +384,7 @@ function tag_options(tagtext) {
 	polyParse(tagtext);
 	current_options.forEach(function(option){
 		var option_var = oneSplit(" ", option)[0];
-		if (v[option_var + "_last"]) delete v[option_var + "_last"];
+		if (v[option_var]) delete v[option_var];
 	});
 	current_options.forEach(function(option){
 		var parts = oneSplit(" ", option);
@@ -390,10 +398,10 @@ function tag_options(tagtext) {
 		if (v[option_var + "_selected"]) {
 			got_one = true;
 			ret += '<li class="selected">' + option_text + '</li>\n';
-			v[option_var + "_last"] = true;
 			polyParse(option_cmds);
+			v[option_var] = true;
 			delete v[option_var + "_selected"];
-		} else if (v[option_var]) {
+		} else if (v[option_var + "_ever"]) {
 			ret += '<li><a class="before" href="' + href + '">' 
 			  + option_text + '</a></li>\n';
 		} else {
