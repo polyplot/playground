@@ -33,8 +33,8 @@ As he drank his coffee he tried not make his body language show how insulted he 
 {if $room_1 || $room_2 || $room_3: He noticed he could see which doors they had already used because the options for them were purple instead of blue. "I guess everyone knows what that means from their browsers, he thought." Meanwhile the girl was muttering something about a check whether any rooms had been visited so the intro to the hallway could be skipped. He was bored with all this tech stuff. Why can't I just for once have a normal adventure?}
 
 {else He ran up the stairs and shouted "Come on, faster!" as she panted up the second flight of stairs. "I want yo find out how this polyplot scripting stuff works." 
-{if $drank_quadshot: His heart pounded really, really fast and hard. Maybe the quad shot espresso had not been such an brilliant idea...} 
-{if $drank_decaf: His head began to hurt and his mood turned slightly pissy and sour. A day without caffeine was not a good day...}
+{if $drank_quadshot_last: His heart pounded really, really fast and hard. Maybe the quad shot espresso had not been such an brilliant idea...} 
+{if $drank_decaf_last: His head began to hurt and his mood turned slightly pissy and sour. A day without caffeine was not a good day...}
 
 As she finally reached the top the stairs he turned around. They peered down a marble-clad hallway with some light coming from a skylight at the end. The three doors were conveniently marked with signs with the numbers one, two and three. "Well that's almost too corny", he thought. "What is this, a kid novel?"}
 
