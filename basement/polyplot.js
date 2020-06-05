@@ -3,45 +3,49 @@
 
 "use strict";
 
+const navheight = 50;
 const queryString = window.location.search;
 const urlParams = new URLSearchParams(queryString);
-
 const endString = "<p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p>";
+const zoomLevels = [15, 18, 22, 25]
 
-var currentZoom = 100;
-var minZoom = 80;
-var maxZoom = 140;
 var book = false;
 var v = {
-	pp_scroll_ptr: 0,
+	// Don't ask about the 48. Did I mention how I hate CSS and browsers?
+	pp_scroll_ptr: [0, 48, window.innerWidth],
 	pp_html_ptrcounter: 0, 
-	pp_html: ""
+	pp_html: "",
+	pp_zoom: 1
 };
 var jumping = null;
 var debugCounter = 0;	
 var current_options = [];
 var tags = {};
 var last_if = false;
-var didScroll = false;
+var scrolltimer = null;
 
 $(document).ready(function() {
 	loadVars();
+	doZoom(v['pp_zoom']);
 	loadBook();
-	saveVars();
+	if (v['pp_dark']) { dark(); } else { light(); }
+	if (v['pp_serif']) { serif(); } else { sans_serif(); }
+	if (navigator.userAgent.indexOf( "Mobile" ) !== -1 || 
+	  navigator.userAgent.indexOf( "iPhone" ) !== -1 || 
+	  navigator.userAgent.indexOf( "Android" ) !== -1 || 
+	  navigator.userAgent.indexOf( "Windows Phone" ) !== -1) {
+	  	$('a.fontsize').css('visibility', 'visible');
+	}
 });
 
 $('#booktext').scroll(function() {
-	didScroll = true;
-});
-
-setInterval(function() {
-    if ( didScroll ) {
-        didScroll = false;
+	if (scrolltimer) window.clearTimeout(scrolltimer);
+	scrolltimer = setTimeout(function() {
 		v['pp_scroll_ptr'] = scrollPosition();
 		saveVars();
 		console.log("stored pos");
-    }
-}, 2000);
+	}, 1000);
+});
 
 function resetBook() {
 	$("input").prop("checked", false);
@@ -59,30 +63,30 @@ function startOver() {
 }
 
 function fontBigger(){
-	if (currentZoom < maxZoom) {
-		currentZoom += 20;
-		doZoom();
+	if (v['pp_zoom'] < zoomLevels.length - 1) {
+		doZoom(++v['pp_zoom']);
 		$("#smaller").removeClass("disabled");
+		saveVars();
 	}
-	if (currentZoom >= maxZoom) {
+	if (v['pp_zoom'] >= zoomLevels.length - 1) {
 		$("#bigger").addClass("disabled");
 	} 
 }
 
 function fontSmaller(){
-	if (currentZoom > minZoom) {
-		currentZoom -= 20;
-		doZoom();
+	if (v['pp_zoom'] > 0) {
+		doZoom(--v['pp_zoom']);
 		$("#bigger").removeClass("disabled");
+		saveVars();
 	}
-	if (currentZoom <= minZoom) {
+	if (v['pp_zoom'] <= 0) {
 		$("#smaller").addClass("disabled");
 	}     	
 }
 
-function doZoom() {
+function doZoom(zoomlevel) {
 	var pos = scrollPosition();
-	$('#booktext').css('zoom', currentZoom + '%');
+	$('#booktext').css('font-size', zoomLevels[zoomlevel] + 'px');
 	scrollPosition(pos);
 }
 
@@ -93,16 +97,27 @@ function scrollPosition(pos=null) {
 	if (pos === null) {
 		for (var i=0; i<elements.length; i++) {
 			el = $(elements[i]);
-			if (el.offset().top >= scroll && el.is(':visible')){
-				return i;
+			var overshoot = el.offset().top - scroll - navheight
+			if (overshoot >=0 && el.is(':visible')){
+				var ret = [i, overshoot, window.innerWidth];
+				console.log("scrollPosition read: " + ret);
+				return ret;
 			}
 		}
 	} else {
-		if (pos >= elements.length) return false;
-		el = $(elements[pos]);
+		if (pos[0] >= elements.length) {
+			console.log("scrollPosition attempted to go beyond: " + pos[0]);
+			return false;
+		}
+		el = $(elements[pos[0]]);
 		setTimeout(function(){
 			el[0].scrollIntoView();
+			if (window.innerWidth == pos[2]) {
+				var finalPos = $("#booktext").scrollTop() - pos[1]; 
+				$("#booktext").scrollTop(finalPos);
+			}
 		},50);		
+		console.log("scrollPosition go to: " + pos);
 		return true;
 	}
 }
@@ -173,37 +188,46 @@ function newHtmlPtr() {
 	return ++v['pp_html_ptrcounter'];
 }
 
-function loadBook() {
+function loadBook(book_ptr=null, html_ptr=null) {
 	console.log("loadBook");
-	if (v['pp_dark']) { dark(); } else { light(); }
-	if (v['pp_serif']) { serif(); } else { sans_serif(); }
-	if (!book) {
-		var xmlhttp = new XMLHttpRequest ();
-		xmlhttp.open('GET', 'book.txt', false);
-		xmlhttp.send();
-		book = xmlhttp.responseText + endString;
-	}
-	if (v['pp_html_ptr'] && v['pp_book_ptr'] != 'end') {
-		var html_ptr_comment = "<!-- " + v['pp_html_ptr'] + " -->";
-		var found = v['pp_html'].indexOf(html_ptr_comment);
-		if (found != -1) {
-			v['pp_html'] = v['pp_html'].substring(0, found);
-			console.log("skipped to html_ptr: " + html_ptr_comment);
+	if (! html_ptr && v['pp_html'] != "") {
+		console.log("new load");
+		$('#booktext').html(v['pp_html']);
+	} else {
+		if (!book) {
+			var xmlhttp = new XMLHttpRequest ();
+			xmlhttp.open('GET', 'book.txt', false);
+			xmlhttp.send();
+			book = xmlhttp.responseText + endString;
+			// Replace \{ and \} with unicode braces that don't trigger polyParse() 
+			book = book.replace(/\\\{/g, ' ❴');
+			book = book.replace(/\\\}/g, '❵ ');
 		}
+		if (v['pp_book_ptr'] != 'end') {
+			var new_html = polyParse(book, true);
+			// Put back the escaped curly braces
+			new_html = new_html.replace(/ ❴/g, '{');
+			new_html = new_html.replace(/❵ /g, '}');
+			// Every line that has something on it becomes its own <p>
+			new_html = new_html.replace(/^(.*?\w+.*?)$/gm, '<p>$1</p>');
+			new_html = new_html.replace(/↲/g, "\n");
+			console.log(new_html);
+			if (html_ptr) {
+				var id = "#html_ptr_" + html_ptr;
+				$(id).nextAll().remove();
+				$(id).replaceWith(new_html);
+			} else {
+				$("#booktext").html(new_html);
+			}
+			// The DOM unwraps some tags from their wrapping <p>'s, Leaving
+			// those empty. A way to only wrap what needs to be wrapped would
+			// be cleaner, but is beyond regex and needs a parsing step.
+			$('p:empty').remove();
+			v['pp_html'] = $("#booktext").html();
+		}
+		saveVars();
 	}
-	// Replace \{ and \} with unicode braces that don't trigger polyParse() 
-	book = book.replace ("\\{", ' ❴');
-	book = book.replace ("\\}", '❵ ');
-	// Run polyParse on whole thing	
-	v['pp_html'] += polyParse(book, true);
-	// Put back the escaped curly braces
-	v['pp_html'] = v['pp_html'].replace (' ❴', '{');
-	v['pp_html'] = v['pp_html'].replace ('❵ ', '}');
-	// Everything that wasn't a tag becomes <p>
-	v['pp_html'] = v['pp_html'].replace (/^([^<>]\w+.*)$/mg, '<p>$1</p>\n');
-	$('#booktext').html(v['pp_html']);
-	scrollPosition(v['pp_scroll_ptr']);
-	saveVars();
+	if (! html_ptr) scrollPosition(v['pp_scroll_ptr']);
 }
 
 function saveVars() {
@@ -337,7 +361,11 @@ function tagParse(tag) {
 		var func = false;
 	}	
 	if (func) {
-		var ret = func(parts[1]);
+		if (parts[1] != "") {
+			var ret = func(parts[1]);
+		} else {
+			var ret = func();
+		}
 	} else {
 		var ret = tag_unknown(tag);
 	}
@@ -350,16 +378,19 @@ function tagParse(tag) {
 	}
 }
 
+
 // Below are all the tags shipped with Polyplot. You can make your own
 // tags by just creating a function like one of these in the book.js file.
 
 function tag_anchor(tagtext) {
-	return "";
 }
 
 function tag_chapter(tagtext) {
 	var parts = oneSplit(" ", tagtext);
 	return "\n<h2>" + parts[1] + "</h2>\n";
+}
+
+function tag_comment(tagtext) {
 }
 
 function tag_else(tagtext) {
@@ -403,8 +434,7 @@ function tag_options(tagtext) {
 	v['pp_book_ptr'] = options_id;
 	console.log("setting book_ptr to: " + options_id);
 	saveVars();
-	var ret = "\n<!-- " + v['pp_html_ptr'] + " -->\n";
-	ret += "<ul>\n"
+	var ret = "<ul id='html_ptr_" + v['pp_html_ptr'] + "'>\n"
 	var got_one = false;
 	current_options = [];
 	var current_v = [];
@@ -442,6 +472,24 @@ function tag_options(tagtext) {
 
 function tag_print(tagtext) {
 	return doEval(tagtext);
+}
+
+function tag_span(tagtext) {
+	var parts = oneSplit(/\s/m, tagtext);
+	var cssclass = parts[0];
+	var span_open = '<span class="' + cssclass +'">';
+	var span_close = "</span>";
+	var ret = parts[1];
+	// If the 'white-space' css property for our span includes 'pre', we
+	// replace the newlines with a special token, to be put back in later
+	// processing.
+	var el = $(span_open + span_close);
+	$("#booktext").append(el);
+ 	if ($("." + cssclass).css('white-space').includes("pre")) {
+ 		ret = ret.replace(/\n/g, "↲")
+ 	}
+ 	$("#booktext").remove(el);
+	return '<span class="' + cssclass +'">' + polyParse(ret) + '</span>';
 }
 
 function tag_unknown(tagtext) {
